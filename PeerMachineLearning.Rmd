@@ -1,0 +1,187 @@
+---
+title: "Peer Graded Assignment - Practical Machine Learning"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Overview
+
+Using data from use data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants, this analysis is aimed to predict the "classe" variable from the 20 test cases from the test dataset.
+
+The training data for this project are available here:
+
+<https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv>
+
+The test data are available here:
+
+<https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv>
+
+Dataset: [Human Activity Recognition Dataset](http://web.archive.org/web/20161224072740/http:/groupware.les.inf.puc-rio.br/har)
+
+## Methods
+
+The analysis were done by cleaning irrelevant variable (X, username, timestamps, and window) from both the training and the test data. The cleaned training data were then used to training and modelling algorithms. The training data were splitted into the data used for training the model, and validation, which were used to build Gradient Boosting Machine(GBM) and Random Forest (RF). Accuracy, Kappa Statistics, and Out-of-sample errors were attained from Confusion Matrix. The best model were then used to predict the testing dataset
+
+## Load the data
+
+```{r}
+dir <- "C:\\Users\\Regina Maria\\OneDrive\\Desktop"
+setwd(dir)
+getwd()
+```
+
+```{r}
+fileurl_train <- "https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv"
+fileurl_test <- "https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv"
+
+#download the file and verifying the file
+if (!file.exists("data")){
+    dir.create("data")
+}
+
+download.file(fileurl_train, destfile = "./data/train.csv", method = "curl")
+download.file(fileurl_test, destfile = "./data/test.csv", method = "curl")
+
+list.files("./data")
+
+dateDownloaded <- date()
+dateDownloaded
+```
+
+## Reading and Cleaning the data
+
+```{r}
+#read the train and test data
+traindata <- read.csv("./data/train.csv", sep = ",", header = TRUE)
+testdata <- read.csv("./data/test.csv", sep = ",", header = TRUE)
+
+#removing NAs
+traindata <- traindata[, colSums(is.na(traindata)) == 0]
+testdata <- testdata[, colSums(is.na(testdata)) == 0]
+
+#removing near zero variance
+library(caret)
+nzv_train <- nearZeroVar(traindata)
+nzv_test <- nearZeroVar(testdata)
+traindata <- traindata[, -nzv_train]
+testdata <- testdata[, -nzv_test]
+
+#removing irrelevant data for model training
+variables <- c("X", "user_name", "raw_timestamp_part_1", "raw_timestamp_part_2", "cvtd_timestamp", "num_window")
+traindata <- traindata[, !(names(traindata) %in% variables)]
+testdata <- testdata[, !(names(testdata) %in% variables)]
+
+#making classe into factor
+traindata$classe <- as.factor(traindata$classe)
+
+head(traindata)
+head(testdata)
+```
+
+## Separating training data for training and validation
+
+```{r}
+#creating data partition
+set.seed(3233)
+inTrain <- createDataPartition(y = traindata$classe, p = 0.75, list = FALSE)
+training <- traindata[inTrain,]
+validation <- traindata[-inTrain,]
+dim(training); dim(validation)
+```
+
+```{r}
+#creating kfolds
+folds <- createFolds(y = training$classe, k = 10, list = TRUE, returnTrain = TRUE)
+sapply(folds, length)
+
+folds <- createFolds(y = validation$classe, k = 10, list = TRUE, returnTrain = TRUE)
+sapply(folds, length)
+```
+
+## Fitting GBM model
+
+```{r}
+#gbm - boosting
+set.seed(3233)
+controlgbm <- trainControl(method="cv", 5, allowParallel = TRUE)
+gbmmodel <- train(classe~., data = training, method = "gbm", verbose = FALSE, trControl = controlgbm)
+gbmmodel
+```
+
+```{r}
+#confusion matrix for validating model
+predictgbm <- predict(gbmmodel, validation)
+confusionMatrix(validation$classe, predictgbm)
+```
+
+## Fitting RF model
+
+```{r}
+#rf 
+set.seed(3233)
+controlrf <- trainControl(method="cv", 5, allowParallel = TRUE)
+rfmodel <- train(classe~., data = training, method = "rf", trControl = controlrf)
+rfmodel
+```
+
+```{r}
+#confusion matrix for validating model
+predictrf <- predict(rfmodel, validation)
+confusionMatrix(validation$classe, predictrf)
+```
+
+```{r}
+#out of sample error random forest
+matrixgbm <- confusionMatrix(validation$classe, predictgbm)
+accuracygbm <- matrixgbm$overall["Accuracy"]
+errorgbm <- 1 - as.numeric(accuracygbm)
+errorgbm
+```
+
+```{r}
+#out of sample error random forest
+matrixrf <- confusionMatrix(validation$classe, predictrf)
+accuracyrf <- matrixrf$overall["Accuracy"]
+errorrf <- 1 - as.numeric(accuracyrf)
+errorrf
+```
+
+## Comparing model
+
+```{r}
+#creating data frame
+model_compare <- data.frame(
+    Model = c("GBM", "RF"),
+    Accuracy = c(as.numeric(accuracygbm), as.numeric(accuracyrf)),
+    OutOfSampleError = c(as.numeric(errorgbm), as.numeric(errorrf))
+)
+
+#creating bar plot for comparison
+par(mfrow = c(1,2))
+
+barplot(model_compare$Accuracy,
+        names.arg = model_compare$Model,
+        main = "Model Accuracy",
+        ylab = "Accuracy",
+        col = "blue")
+
+barplot(model_compare$OutOfSampleError,
+        names.arg = model_compare$Model,
+        main = "Out-of-Sample Error",
+        ylab = "Error",
+        col = "red")
+```
+
+Higher kappa statistic and accuracy showed Random Forest model showed to be a better model than boosted model. Random forest also showed to have lower out of sample error. Hence, **Random Forest were used as the final model for prediction**
+
+## Predicting the testing model
+
+```{r}
+finalmodel <- rfmodel
+predicttest <- predict(finalmodel, testdata)
+table(predicttest)
+```
