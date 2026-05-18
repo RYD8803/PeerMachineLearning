@@ -183,5 +183,5 @@ Higher kappa statistic and accuracy showed Random Forest model showed to be a be
 ```{r}
 finalmodel <- rfmodel
 predicttest <- predict(finalmodel, testdata)
-table(predicttest)
+predicttest
 ```
