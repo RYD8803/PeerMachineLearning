@@ -29,12 +29,6 @@ The analysis were done by cleaning irrelevant variable (X, username, timestamps,
 ## Load the data
 
 ```{r}
-dir <- "C:\\Users\\Regina Maria\\OneDrive\\Desktop"
-setwd(dir)
-getwd()
-```
-
-```{r}
 fileurl_train <- "https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv"
 fileurl_test <- "https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv"
 
